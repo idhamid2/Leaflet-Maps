@@ -1,0 +1,151 @@
+<html>
+    <head>
+        <title>OpenSky-API Real Time Data</title>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.6.0/dist/leaflet.css" integrity="sha512-xwE/Az9zrjBIphAcBb3F6JVqxf46+CDLwfLMHloNu6KEQCAWi6HcDUbeOfBIptF7tcCzusKFjFw2yuvEpDL9wQ==" crossorigin="">
+        <script src="https://unpkg.com/leaflet@1.6.0/dist/leaflet.js" integrity="sha512-gZwIG9x3wUXg2hdXF6+rVkLF/0Vi9U8D2Ntg4Ga5I5BZpVkVxlJWbSQtXPSiUTtC0TjtGOmxa1AJPuV0CPthew==" crossorigin=""></script>
+        <script type="text/javascript" src="http://www.liedman.net/leaflet-realtime/dist/leaflet-realtime.js"></script>
+        <script src="https://unpkg.com/heatmapjs@2.0.2/heatmap.min.js"></script>
+        <script src="https://unpkg.com/leaflet-heatmap@1.0.0/leaflet-heatmap.js"></script>
+        <style>
+            body {
+                padding: 0;
+                margin: 0;
+            }
+
+            html body #map {
+                height: 100%;
+                width: 100%;
+            }
+        </style>
+    </head>
+
+    <body install-cross-origin-ajax-bridge="true">
+
+        <div id="map"></div>
+        
+        <script>
+          // storing the  data from Open-Sky API request
+              var testData= {
+                "max": 8,
+                "data": []
+               };          
+
+
+        var cfg = {
+          // radius should be small ONLY if scaleRadius is true (or small radius is intended)
+          "radius": 5,
+          "maxOpacity": .8,
+          // scales the radius based on map zoom
+          "scaleRadius": true,
+          // if set to false the heatmap uses the global maximum for colorization
+          // if activated: uses the data maximum within the current map boundaries
+          //   (there will always be a red spot with useLocalExtremas true)
+          "useLocalExtrema": true,
+          // which field name in your data represents the latitude - default "lat"
+          latField: 'lat',
+          // which field name in your data represents the longitude - default "lng"
+          lngField: 'lng',
+          // which field name in your data represents the data value - default "value"
+          valueField: 'count'
+        };
+
+        var heatmapLayer = new HeatmapOverlay(cfg);
+        var map = L.map('map').setView([0, 0], 2),
+        realtime = L.realtime(getCustomData, {
+        interval:  5*1000,
+        })
+        heatmapLayer.addTo(map);
+         
+       L.tileLayer('https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token=pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpejY4NXVycTA2emYycXBndHRqcmZ3N3gifQ.rJcFIG214AriISLbB6B5aw', {
+           maxZoom: 13,
+           minZoom: 02,
+           attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors, ' +
+           '<a href="https://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, ' +
+           'Imagery © <a href="https://www.mapbox.com/">Mapbox</a>',
+            id: 'mapbox/streets-v11'
+            }).addTo(map);
+            
+      realtime.on('update', function(e) {
+      map.fitBounds(realtime.getBounds(), {maxZoom: 13});                                 
+      });
+
+      function getCustomData(success, error) {
+      let url = "https://opensky-network.org/api/states/all"; //url of service
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', url);
+      xhr.onload = function () {
+      if (xhr.status === 200) {
+        var res = convertToGeoJSON(xhr.responseText);
+        success(res);
+      } else {
+        var e = new Error("HTTP Rquest")
+        error(e, xhr.status);
+        }
+      };
+      
+      xhr.send();
+                        
+      function convertToGeoJSON(input) {
+      //convert input to Object, if it is of type string
+      testData.data.length = 0;
+      if (typeof(input) == "string") {
+      input = JSON.parse(input);
+      input = input.states;
+      }
+      
+      var fs = {
+        "type": "FeatureCollection",
+        "features": []
+      };
+      for (var i = 0; i <input.length; i++) {
+        var ele = input[i];
+        //console.log("The var ele is" + ele);
+        var feature = {
+        "type": "Feature",
+        "geometry": {
+        "type": "Point",
+        "coordinates": [ele[5], ele[6]]
+        }
+        };
+
+        var feature1 = {
+        "lat" : ele[6],
+        "lng" : ele[5],
+        "count" : 1                                    
+        };
+
+
+        //console.log("The var feature is " + feature.geometry.coordinates);
+       feature.properties = ele;
+       //set the id
+       feature.properties["id"]=i;
+                        
+      //check that the elements are numeric and only then insert
+      if (isNumeric(ele[5]) && isNumeric(ele[6])) {
+      //add this feature to the features array
+      fs.features.push(feature);
+      testData.data.push(feature1); 
+      }
+      }
+     // console.log("The fs is " + fs.features.length);
+      //console.log("The testData is " + testData.data.length);
+       //return the GeoJSON FeatureCollection
+      heatmapLayer.setData(testData);
+     return fs;
+      }
+      function isNumeric(n) {
+       return !isNaN(parseFloat(n)) && isFinite(n);
+      }
+                        
+      }   
+            
+    </script>
+            
+</body>
+</html>
+
+
+
+
